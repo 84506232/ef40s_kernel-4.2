@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -73,7 +73,7 @@
 #define	MIPI_PHY_D0_CONTROL_HS_REC_EQ_SHFT				0x1c
 #define	MIPI_PHY_D1_CONTROL_MIPI_CLK_PHY_SHUTDOWNB_SHFT		0x9
 #define	MIPI_PHY_D1_CONTROL_MIPI_DATA_PHY_SHUTDOWNB_SHFT	0x8
-#define	DBG_CSI	1
+#define	DBG_CSI	0
 
 static struct clk *camio_cam_clk;
 static struct clk *camio_vfe_clk;
@@ -471,7 +471,7 @@ static irqreturn_t msm_io_csi_irq(int irq_num, void *data)
 	uint32_t irq = 0;
 	if (csibase != NULL)
 		irq = msm_io_r(csibase + MIPI_INTERRUPT_STATUS);
-	printk("%s MIPI_INTERRUPT_STATUS = 0x%x\n", __func__, irq);
+	CDBG("%s MIPI_INTERRUPT_STATUS = 0x%x\n", __func__, irq);
 	if (csibase != NULL)
 		msm_io_w(irq, csibase + MIPI_INTERRUPT_STATUS);
 	return IRQ_HANDLED;

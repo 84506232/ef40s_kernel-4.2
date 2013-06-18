@@ -26,7 +26,7 @@
 #define __HCI_CORE_H
 
 #include <net/bluetooth/hci.h>
-
+#include <linux/wakelock.h>
 /* HCI upper protocols */
 #define HCI_PROTO_L2CAP	0
 #define HCI_PROTO_SCO	1
@@ -272,7 +272,6 @@ struct hci_dev {
 	void (*destruct)(struct hci_dev *hdev);
 	void (*notify)(struct hci_dev *hdev, unsigned int evt);
 	int (*ioctl)(struct hci_dev *hdev, unsigned int cmd, unsigned long arg);
-	void (*wake_peer)(struct hci_dev *);
 };
 
 struct hci_conn {
@@ -324,10 +323,11 @@ struct hci_conn {
 	struct timer_list disc_timer;
 	struct timer_list idle_timer;
 	struct delayed_work	rssi_update_work;
+	struct timer_list encrypt_pause_timer;
 
 	struct work_struct work_add;
 	struct work_struct work_del;
-
+	struct wake_lock idle_lock;
 	struct device	dev;
 	atomic_t	devref;
 
@@ -355,6 +355,7 @@ struct hci_conn {
 	__u8		auth;
 	void		*smp_conn;
 	struct timer_list smp_timer;
+	__u8		conn_valid;
 
 
 	void (*connect_cfm_cb)	(struct hci_conn *conn, u8 status);
@@ -382,7 +383,7 @@ extern rwlock_t hci_cb_list_lock;
 
 /* ----- Inquiry cache ----- */
 #define INQUIRY_CACHE_AGE_MAX   (HZ*30)   /* 30 seconds */
-#define INQUIRY_ENTRY_AGE_MAX   (HZ*60)   /* 60 seconds */
+#define INQUIRY_ENTRY_AGE_MAX   (HZ*60*60)   /* 1 Hour */
 
 #define inquiry_cache_lock(c)		spin_lock(&c->lock)
 #define inquiry_cache_unlock(c)		spin_unlock(&c->lock)
@@ -589,10 +590,7 @@ static inline void hci_chan_hold(struct hci_chan *chan)
 }
 int hci_chan_put(struct hci_chan *chan);
 
-struct hci_chan *hci_chan_accept(struct hci_conn *hcon,
-				struct hci_ext_fs *tx_fs,
-				struct hci_ext_fs *rx_fs);
-struct hci_chan *hci_chan_create(struct hci_conn *hcon,
+struct hci_chan *hci_chan_create(struct hci_chan *chan,
 				struct hci_ext_fs *tx_fs,
 				struct hci_ext_fs *rx_fs);
 void hci_chan_modify(struct hci_chan *chan,

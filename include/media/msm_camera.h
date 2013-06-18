@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,9 +25,30 @@
 #include <linux/time.h>
 #endif
 
-#ifdef __KERNEL__
 #include <linux/ion.h>
-#endif
+#define VFE_FRAME_NUM_MAX	0x00FFFFFF
+#define ZERO_OUT_FRAME		0xFF000000
+#define CLEAR_FOCUS_BIT		0x7FFFFFFF
+#define get_focus_bit(x) ({ \
+	(x & 0x80000000) >> 31; \
+})
+#define get_frame_num(x) ({ \
+	x & VFE_FRAME_NUM_MAX; \
+})
+#define get_focus_in_position(x) ({ \
+	(x & 00000001) << 31; \
+})
+#define increment_frame_num(x) ({ \
+	uint32_t num = get_frame_num(x); \
+	num = num + 1; \
+	(x & ZERO_OUT_FRAME) | num; \
+})
+#define decrement_frame_num(x) ({ \
+	uint32_t num = get_frame_num(x); \
+	num = num - 1; \
+	(x & ZERO_OUT_FRAME) | num; \
+})
+
 #define MSM_CAM_IOCTL_MAGIC 'm'
 
 #define MSM_CAM_IOCTL_GET_SENSOR_INFO \
@@ -178,7 +199,7 @@
 	_IOR(MSM_CAM_IOCTL_MAGIC, 49, struct v4l2_queryctrl)
 
 #define MSM_CAM_IOCTL_GET_KERNEL_SYSTEM_TIME \
-	_IOW(MSM_CAM_IOCTL_MAGIC, 50, struct timeval *)
+	_IOW(MSM_CAM_IOCTL_MAGIC, 53, struct timeval *)
 
 #define MSM_CAM_IOCTL_SET_VFE_OUTPUT_TYPE \
 	_IOW(MSM_CAM_IOCTL_MAGIC, 51, uint32_t *)
@@ -188,6 +209,8 @@
 
 #define MSM_CAM_IOCTL_MCTL_DIVERT_DONE \
 	_IOR(MSM_CAM_IOCTL_MAGIC, 52, struct msm_cam_evt_divert_frame *)
+
+#define MSM_CAM_IOCTL_EXT_CONFIG  _IOWR(MSM_CAM_IOCTL_MAGIC, 50, sensor_ext_cfg_data)
 
 struct msm_mctl_pp_cmd {
 	int32_t  id;
@@ -248,6 +271,16 @@ struct msm_ctrl_cmd {
 	int vnode_id;  /* video dev id. Can we overload resp_fd? */
 	uint32_t stream_type; /* used to pass value to qcamera server */
 	int config_ident; /*used as identifier for config node*/
+};
+struct msm_isp_ctrl_cmd {
+	uint16_t type;
+	uint16_t length;
+	uint16_t status;
+	uint32_t timeout_ms;
+	int resp_fd; /* FIXME: to be used by the kernel, pass-through for now */
+	/* maximum possible data size that can be sent to user space is only
+		64 bytes */
+	char value[40];
 };
 
 struct msm_cam_evt_msg {
@@ -329,6 +362,7 @@ struct msm_isp_event_ctrl {
 		struct msm_cam_evt_divert_frame div_frame;
 		struct msm_mctl_pp_event_info pp_event_info;
 	} isp_data;
+	uint32_t evt_id;
 };
 
 #define MSM_CAM_RESP_CTRL              0
@@ -807,7 +841,9 @@ struct msm_snapshot_pp_status {
 #define CFG_GET_EEPROM_DATA		33
 #define CFG_SET_ACTUATOR_INFO		34
 #define CFG_GET_ACTUATOR_INFO		35
-#define CFG_MAX			36
+#define CFG_SET_SATURATION	36
+#define CFG_GET_OUTPUT_INFO		37
+#define CFG_MAX			38
 #endif//pangya End ]]
 
 #define MOVE_NEAR	0
@@ -819,6 +855,7 @@ struct msm_snapshot_pp_status {
 #define SENSOR_HFR_60FPS_MODE 3
 #define SENSOR_HFR_90FPS_MODE 4
 #define SENSOR_HFR_120FPS_MODE 5
+#define SENSOR_SNAPSHOT_TRANSFER	6
 
 #define SENSOR_QTR_SIZE			0
 #define SENSOR_FULL_SIZE		1

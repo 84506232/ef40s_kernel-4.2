@@ -153,7 +153,6 @@ static int msm_fb_pan_idle(struct msm_fb_data_type *mfd);
 static int msm_fb_blank_sub_force(int blank_mode, struct fb_info *info, int bl);
 #endif
 
-static void msm_fb_fillrect(struct fb_info *info, const struct fb_fillrect *rect);
 
 #ifdef MSM_FB_ENABLE_DBGFS
 
@@ -2058,6 +2057,11 @@ msm_fb_open_exit:
 	return result;
 }
 
+static void msm_fb_free_base_pipe(struct msm_fb_data_type *mfd)
+{
+	return 	mdp4_overlay_free_base_pipe(mfd);
+}
+
 #if defined(CONFIG_F_SKYDISP_BOOT_LOGO_IN_KERNEL) || defined(CONFIG_SKY_CHARGING) || defined(CONFIG_SKY_SMB_CHARGER)
 boolean no_release_first = TRUE;
 #endif
@@ -2078,19 +2082,22 @@ static int msm_fb_release(struct fb_info *info, int user)
 	mfd->ref_cnt--;
 
 #if defined(CONFIG_F_SKYDISP_BOOT_LOGO_IN_KERNEL) || defined(CONFIG_SKY_CHARGING) || defined(CONFIG_SKY_SMB_CHARGER)
-	if ((!mfd->ref_cnt) && (mfd->op_enable) && !no_release_first)
+	if (!mfd->ref_cnt && !no_release_first) {
 #else
-	if ((!mfd->ref_cnt) && (mfd->op_enable))
+	if (!mfd->ref_cnt) {
 #endif
-	{
 #if defined(CONFIG_F_SKYDISP_BOOT_LOGO_IN_KERNEL) || defined(CONFIG_SKY_CHARGING) || defined(CONFIG_SKY_SMB_CHARGER)
 		no_release_first = FALSE;
 #endif
-		if ((ret =
-		     msm_fb_blank_sub(FB_BLANK_POWERDOWN, info,
-				      mfd->op_enable)) != 0) {
-			printk(KERN_ERR "msm_fb_release: can't turn off display!\n");
-			goto msm_fb_release_exit;
+		if (mfd->op_enable) {
+			ret = msm_fb_blank_sub(FB_BLANK_POWERDOWN, info,
+							mfd->op_enable);
+			if (ret != 0) {
+				printk(KERN_ERR "msm_fb_release: can't turn off display!\n");
+				return ret;
+			}
+		} else {
+			msm_fb_free_base_pipe(mfd);
 		}
 	}
 
@@ -4555,16 +4562,7 @@ struct platform_device *msm_fb_add_device(struct platform_device *pdev)
 		if (hdmi_prim_display)
 			pdata->panel_info.fb_num = 2;
 		else
-#ifdef CONFIG_F_SKYDISP_HDMI_CAPTION
-         {
-            if (type != DTV_PANEL)
-			  pdata->panel_info.fb_num = 1;
-#else
-           pdata->panel_info.fb_num = 1;
-#endif
-#ifdef CONFIG_F_SKYDISP_HDMI_CAPTION
-         }
-#endif
+			pdata->panel_info.fb_num = 2; //1;
 	}
 	else
 		pdata->panel_info.fb_num = MSM_FB_NUM;

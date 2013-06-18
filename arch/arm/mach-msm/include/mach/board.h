@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/include/mach/board.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2012, The Linux Foundation. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -204,11 +204,16 @@ struct msm_camera_gpio_conf {
 
 struct msm_camera_sensor_platform_info {
 	int mount_angle;
+	int sensor_reset_enable;	
 	int sensor_reset;
+	int sensor_pwd;
+	int vcm_pwd;
+	int vcm_enable;	
 	struct camera_vreg_t *cam_vreg;
 	int num_vreg;
 	int32_t (*ext_power_ctrl) (int enable);
 	struct msm_camera_gpio_conf *gpio_conf;
+	int(*sensor_power_control) (int);	
 };
 
 struct msm_actuator_info {
@@ -448,6 +453,8 @@ struct msm_vidc_platform_data {
 #ifdef CONFIG_MSM_BUS_SCALING
 	struct msm_bus_scale_pdata *vidc_bus_client_pdata;
 #endif
+	int disable_turbo;
+        int cont_mode_dpb_count;
 };
 
 #if defined(CONFIG_USB_PEHCI_HCD) || defined(CONFIG_USB_PEHCI_HCD_MODULE)

@@ -1474,14 +1474,20 @@ int mipi_dsi_cmd_dma_tx(struct dsi_buf *tp)
 	wmb();
 	spin_unlock_irqrestore(&dsi_mdp_lock, flags);
 
+#if 0 // If LCD disconnected, this code cannot be pass. wait unlimited time.
+	wait_for_completion(&dsi_dma_comp);
+	ret = tp->len;
+#else // wait, and return error when Timeout.
 	ret_completion = wait_for_completion_timeout( &dsi_dma_comp, MIPI_DSI_TX_TIMEOUT_ms );
-	if( ret_completion == 0 )  {
+	if( ret_completion == 0 )	{
 		pr_err("mipi_dsi_cmd_dma_tx FAILED : return = %lu (%x %x %x %x)\n", 
-				ret_completion, tp->data[0], tp->data[1], tp->data[2], tp->data[3] );
+			ret_completion, tp->data[0], tp->data[1], tp->data[2], tp->data[3] );
 		ret = -1; // return error code;
-	}else {
+	}
+	else {
 		ret = tp->len;
 	}
+#endif 
 
 	dma_unmap_single(&dsi_dev, tp->dmap, tp->len, DMA_TO_DEVICE);
 	tp->dmap = 0;

@@ -152,12 +152,6 @@ void hdmi_msm_cec_init(void)
 		| HDMI_MSM_CEC_REFTIMER_REFTIMER(27 * 50)
 		);
 
-	/* 0x02A4 CEC_TIME */
-	HDMI_OUTP(0x02A4,
-		HDMI_MSM_CEC_TIME_SIGNAL_FREE_TIME(350)
-		| HDMI_MSM_CEC_TIME_ENABLE
-		);
-
 	/*
 	 * 0x02A0 CEC_ADDR
 	 * Starting with a default address of 4
@@ -247,8 +241,13 @@ void hdmi_msm_cec_msg_send(struct hdmi_msm_cec_msg *msg)
 
 	/* 0x0294 HDMI_MSM_CEC_RETRANSMIT */
 	HDMI_OUTP(0x0294,
+#ifdef DRVR_ONLY_CECT_NO_DAEMON
 		HDMI_MSM_CEC_RETRANSMIT_NUM(msg->retransmit)
 		| (msg->retransmit > 0) ? HDMI_MSM_CEC_RETRANSMIT_ENABLE : 0);
+#else
+		HDMI_MSM_CEC_RETRANSMIT_NUM(0) |
+			HDMI_MSM_CEC_RETRANSMIT_ENABLE);
+#endif
 
 	/* 0x028C CEC_CTRL */
 	HDMI_OUTP(0x028C, 0x1 | msg->frame_size << 4);
@@ -4083,6 +4082,8 @@ static void hdmi_msm_turn_on(void)
 	/* HDMI_USEC_REFTIMER[0x0208] */
 	HDMI_OUTP(0x0208, 0x0001001B);
 
+	hdmi_msm_set_mode(TRUE);
+
 	hdmi_msm_video_setup(external_common_state->video_resolution);
 	if (!hdmi_msm_is_dvi_mode())
 		hdmi_msm_audio_setup();
@@ -4097,8 +4098,6 @@ static void hdmi_msm_turn_on(void)
 	/* Toggle HPD circuit to trigger HPD sense */
 	HDMI_OUTP(0x0258, ~(1 << 28) & hpd_ctrl);
 	HDMI_OUTP(0x0258, (1 << 28) | hpd_ctrl);
-
-	hdmi_msm_set_mode(TRUE);
 
 	/* Setup HPD IRQ */
 	HDMI_OUTP(0x0254, 4 | (external_common_state->hpd_state ? 0 : 2));
@@ -4184,13 +4183,13 @@ static void hdmi_msm_hpd_off(void)
 
 	DEV_DBG("%s: (timer, clk, 5V, core, IRQ off)\n", __func__);
 	del_timer(&hdmi_msm_state->hpd_state_timer);
+/* [PS1] 2011.07.13 Kang Seong-Goo, remove HDCP timer */
+#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT  // kkcho_0000
+	del_timer(&hdmi_msm_state->hdcp_timer);
+#endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT */
 	disable_irq(hdmi_msm_state->irq);
 
 	hdmi_msm_set_mode(FALSE);
-
-	/* for power consumtion. The value of 0x0308 makes power down jinho83.kim@lge.com */
-	HDMI_OUTP_ND(0x0308, 0x7F); /*0b01111111*/
-
 	hdmi_msm_state->hpd_initialized = FALSE;
 	hdmi_msm_powerdown_phy();
 	hdmi_msm_state->pd->cec_power(0);
@@ -4320,7 +4319,6 @@ static int hdmi_msm_power_on(struct platform_device *pdev)
 		mutex_unlock(&external_common_state_hpd_mutex);
 
 	hdmi_msm_dump_regs("HDMI-ON: ");
-	msleep(30); /* prevent power reset - jinho83.kim@lge.com */
 
 	DEV_INFO("power=%s DVI= %s\n",
 		hdmi_msm_is_power_on() ? "ON" : "OFF" ,

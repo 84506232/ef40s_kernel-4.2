@@ -3,7 +3,7 @@
  * MSM 7k High speed uart driver
  *
  * Copyright (c) 2008 Google Inc.
- * Copyright (c) 2007-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2011, The Linux Foundation. All rights reserved.
  * Modified: Nick Pelly <npelly@google.com>
  *
  * All source code in this file is licensed under the following license
@@ -1487,6 +1487,7 @@ static irqreturn_t msm_hs_isr(int irq, void *dev)
 void msm_hs_request_clock_off(struct uart_port *uport) {
 	unsigned long flags;
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
+dev_err(uport->dev, "msm_hs_request_clock_off\n"); // kdongsuk test.
 
 	spin_lock_irqsave(&uport->lock, flags);
 	if (msm_uport->clk_state == MSM_HS_CLK_ON) {
@@ -1548,6 +1549,8 @@ static void msm_hs_request_clock_on_locked(struct uart_port *uport) {
 
 void msm_hs_request_clock_on(struct uart_port *uport) {
 	unsigned long flags;
+	dev_err(uport->dev, "msm_hs_request_clock_on\n"); // kdongsuk.
+
 	spin_lock_irqsave(&uport->lock, flags);
 	msm_hs_request_clock_on_locked(uport);
 	spin_unlock_irqrestore(&uport->lock, flags);

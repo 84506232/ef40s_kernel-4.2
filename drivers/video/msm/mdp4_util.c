@@ -2546,9 +2546,10 @@ u32 mdp4_allocate_writeback_buf(struct msm_fb_data_type *mfd, u32 mix_num)
 		pr_err("%s:%d In valid size\n", __func__, __LINE__);
 		return -EINVAL;
 	}
-	
-	buffer_size = roundup(mfd->panel_info.xres * mfd->panel_info.yres * 3 * 2, SZ_4K);
-	
+
+	buffer_size = roundup(mfd->panel_info.xres * \
+		mfd->panel_info.yres * 3 * 2, SZ_4K);
+
 	if (!IS_ERR_OR_NULL(mfd->iclient)) {
 		pr_info("%s:%d ion based allocation mfd->mem_hid 0x%x\n",
 			__func__, __LINE__, mfd->mem_hid);

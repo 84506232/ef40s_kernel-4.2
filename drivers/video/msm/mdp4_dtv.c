@@ -314,7 +314,11 @@ static int dtv_probe(struct platform_device *pdev)
 	if (hdmi_prim_display)
 		mfd->fb_imgType = MSMFB_DEFAULT_TYPE;
 	else
-	mfd->fb_imgType = MDP_ARGB_8888;//MDP_RGB_565;
+#ifdef CONFIG_F_SKYDISP_HDMI_CAPTION
+	    mfd->fb_imgType = MDP_ARGB_8888;
+#else
+	    mfd->fb_imgType = MDP_RGB_565;
+#endif
 
 	fbi = mfd->fbi;
 	fbi->var.pixclock = mfd->panel_info.clk_rate;

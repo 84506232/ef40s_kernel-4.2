@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -292,7 +292,6 @@ static int msm_csic_init(struct v4l2_subdev *sd, uint32_t *csic_version)
 		if (rc < 0) {
 			csic_dev->hw_version = 0;
 			iounmap(csic_dev->base);
-			csic_dev->base = NULL;
 			return rc;
 		}
 	}

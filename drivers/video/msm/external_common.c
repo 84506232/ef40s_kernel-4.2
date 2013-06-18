@@ -76,7 +76,6 @@ const char edid_blk1[0x100] = {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xDF};
 #endif /* DEBUG_EDID */
 
-#ifdef CONFIG_FB_MSM_HDMI_MHL
 #define DMA_E_BASE 0xB0000
 void mdp_vid_quant_set(void)
 {
@@ -93,15 +92,6 @@ void mdp_vid_quant_set(void)
 		MDP_OUTP(MDP_BASE + DMA_E_BASE + 0x78, 0x00FF0000);
 	}
 }
-#else
-void mdp_vid_quant_set(void)
-{
-	/*
-	 * Support for quantization to be added
-	 * only when MHL support is included.
-	 */
-}
-#endif
 
 const char *video_format_2string(uint32 format)
 {
@@ -429,6 +419,14 @@ static ssize_t hdmi_msm_wta_cec(struct device *dev,
 		mutex_lock(&hdmi_msm_state_mutex);
 		hdmi_msm_state->cec_enabled = true;
 		hdmi_msm_state->cec_logical_addr = 4;
+
+		/* flush CEC queue */
+		hdmi_msm_state->cec_queue_wr = hdmi_msm_state->cec_queue_start;
+		hdmi_msm_state->cec_queue_rd = hdmi_msm_state->cec_queue_start;
+		hdmi_msm_state->cec_queue_full = false;
+		memset(hdmi_msm_state->cec_queue_rd, 0,
+			sizeof(struct hdmi_msm_cec_msg)*CEC_QUEUE_SIZE);
+
 		mutex_unlock(&hdmi_msm_state_mutex);
 		hdmi_msm_cec_init();
 		hdmi_msm_cec_write_logical_addr(
@@ -521,7 +519,7 @@ static ssize_t hdmi_msm_wta_cec_frame(struct device *dev,
 			if (hdmi_msm_state->fsm_reset_done)
 				retry++;
 			mutex_unlock(&hdmi_msm_state_mutex);
-			msleep(360);
+			msleep(20);
 		} else
 			break;
 	}
@@ -756,6 +754,9 @@ static DEVICE_ATTR(hdmi_block, S_IRUGO | S_IWUGO,
 #endif
 
 
+
+
+
 static struct attribute *external_common_fs_attrs[] = {
 	&dev_attr_video_mode.attr,
 	&dev_attr_video_mode_str.attr,
@@ -778,6 +779,7 @@ static struct attribute *external_common_fs_attrs[] = {
 	&dev_attr_cec_wr_frame.attr,
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_CEC_SUPPORT */
 	&dev_attr_hdmi_primary.attr,
+
 
 #ifdef CONFIG_F_SKYDISP_HDMI_BLOCK
 	&dev_attr_hdmi_block.attr,
@@ -1572,7 +1574,7 @@ bool hdmi_common_get_video_format_from_drv_data(struct msm_fb_data_type *mfd)
 				: HDMI_VFRMT_1440x576i50_16_9;
 			break;
 		case 1920:
-#ifdef CONFIG_PANTECH_FB_MSM_MHL_SII9244  // 20110429, kkcho, MHL���; '�� HDMI OUTPUT format ; �����... (temp�� )	
+#ifdef CONFIG_PANTECH_FB_MSM_MHL_SII9244  // 20110429, kkcho, MHL紫遂聖 是背 HDMI OUTPUT format 聖 碍秩陥... (temp陥 )	
 			format = HDMI_VFRMT_1920x1080p30_16_9;//HDMI_VFRMT_1280x720p50_16_9;
 #else
 			format = HDMI_VFRMT_1920x1080p60_16_9;
@@ -1662,9 +1664,13 @@ void hdmi_common_init_panel_info(struct msm_panel_info *pinfo)
 	pinfo->wait_cycle = 0;
 	pinfo->bpp = 24;
 	if (hdmi_prim_display)
-		pinfo->fb_num = 2;
+	pinfo->fb_num = 2;
 	else
-		pinfo->fb_num = 2; //1;  For double buffering
+#ifdef CONFIG_F_SKYDISP_HDMI_CAPTION
+	pinfo->fb_num = 2; // For double buffering
+#else
+	pinfo->fb_num = 1;
+#endif
 
 	/* blk */
 	pinfo->lcdc.border_clr = 0;

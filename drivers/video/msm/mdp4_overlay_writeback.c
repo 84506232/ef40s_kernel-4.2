@@ -124,7 +124,7 @@ int mdp4_overlay_writeback_off(struct platform_device *pdev)
 			(struct msm_fb_data_type *)platform_get_drvdata(pdev);
 	if (mfd && writeback_pipe) {
 		mdp4_writeback_dma_busy_wait(mfd);
-		mdp4_overlay_pipe_free(writeback_pipe);
+		mdp4_overlay_pipe_free(writeback_pipe,1);
 		mdp4_overlay_panel_mode_unset(writeback_pipe->mixer_num,
 						MDP4_PANEL_WRITEBACK);
 		writeback_pipe = NULL;
