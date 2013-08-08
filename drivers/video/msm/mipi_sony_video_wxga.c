@@ -52,9 +52,9 @@ static int __init mipi_video_sony_wxga_init(void)
 
 /* Try-case
 ref-2. 20110420, kkcho
-3030->3035 qualcomm-patch이후, 
-mipi_dsi.c의 mipi_dsi_phy_pll_config(panel_info->clk_rate);  코드를 막아야 함. 
-그렇지 않으면.. clk value변경으로 화면 안나옴. 
+3030->3035 qualcomm-patch??, 
+mipi_dsi.c? mipi_dsi_phy_pll_config(panel_info->clk_rate);  ??? ??? ?. 
+??? ???.. clk value???? ?? ???. 
 */
         pinfo.xres = 800;
         pinfo.yres = 1280;

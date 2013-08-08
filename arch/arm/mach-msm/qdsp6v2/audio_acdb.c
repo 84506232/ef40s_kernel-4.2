@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -617,14 +617,11 @@ static int deregister_memory(void)
 {
 	if (atomic64_read(&acdb_data.mem_len)) {
 		mutex_lock(&acdb_data.acdb_mutex);
-		atomic_set(&acdb_data.vocstrm_total_cal_size, 0);
-		atomic_set(&acdb_data.vocproc_total_cal_size, 0);
-		atomic_set(&acdb_data.vocvol_total_cal_size, 0);
-		atomic64_set(&acdb_data.mem_len, 0);
 		ion_unmap_kernel(acdb_data.ion_client, acdb_data.ion_handle);
 		ion_free(acdb_data.ion_client, acdb_data.ion_handle);
 		ion_client_destroy(acdb_data.ion_client);
 		mutex_unlock(&acdb_data.acdb_mutex);
+		atomic64_set(&acdb_data.mem_len, 0);
 	}
 	return 0;
 }
@@ -641,6 +638,7 @@ static int register_memory(void)
 		msm_ion_client_create(UINT_MAX, "audio_acdb_client");
 	if (IS_ERR_OR_NULL(acdb_data.ion_client)) {
 		pr_err("%s: Could not register ION client!!!\n", __func__);
+		result = PTR_ERR(acdb_data.ion_client);
 		goto err;
 	}
 
@@ -648,6 +646,7 @@ static int register_memory(void)
 		atomic_read(&acdb_data.map_handle));
 	if (IS_ERR_OR_NULL(acdb_data.ion_handle)) {
 		pr_err("%s: Could not import map handle!!!\n", __func__);
+		result = PTR_ERR(acdb_data.ion_client);
 		goto err_ion_client;
 	}
 
@@ -662,13 +661,14 @@ static int register_memory(void)
 		acdb_data.ion_handle, 0);
 	if (IS_ERR_OR_NULL(&kvaddr)) {
 		pr_err("%s: Could not get kernel virt addr!!!\n", __func__);
+		result = -EINVAL;
 		goto err_ion_handle;
 	}
+	mutex_unlock(&acdb_data.acdb_mutex);
+
 	atomic64_set(&acdb_data.paddr, paddr);
 	atomic64_set(&acdb_data.kvaddr, kvaddr);
 	atomic64_set(&acdb_data.mem_len, mem_len);
-	mutex_unlock(&acdb_data.acdb_mutex);
-
 	pr_debug("%s done! paddr = 0x%lx, "
 		"kvaddr = 0x%lx, len = x%lx\n",
 		 __func__,
@@ -765,7 +765,7 @@ static long acdb_ioctl(struct file *f,
 		goto done;
 	}
 
-	if (size <= 0) {
+	if ((size <= 0) || (size > sizeof(data))) {
 		pr_err("%s: Invalid size sent to driver: %d\n",
 			__func__, size);
 		result = -EFAULT;

@@ -1,5 +1,5 @@
 
-/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -90,7 +90,7 @@ void mipi_dsi_mdp_stat_inc(int which)
 }
 #endif
 
-#define MIPI_DSI_TX_TIMEOUT_ms	msecs_to_jiffies(VSYNC_PERIOD*20) // 320 msec
+#define MIPI_DSI_TX_TIMEOUT_ms	(HZ *40/1000) // 40ms
 
 void mipi_dsi_init(void)
 {
@@ -1434,10 +1434,10 @@ int mipi_dsi_cmds_rx_new(struct dsi_buf *tp, struct dsi_buf *rp,
 
 int mipi_dsi_cmd_dma_tx(struct dsi_buf *tp)
 {
-	unsigned long ret_completion;
-	int ret = 0;
 
 	unsigned long flags;
+	unsigned long ret_completion;
+	int ret = 0;
 
 #ifdef DSI_HOST_DEBUG
 	int i;
@@ -1491,7 +1491,6 @@ int mipi_dsi_cmd_dma_tx(struct dsi_buf *tp)
 
 	dma_unmap_single(&dsi_dev, tp->dmap, tp->len, DMA_TO_DEVICE);
 	tp->dmap = 0;
-
 	return ret;
 }
 

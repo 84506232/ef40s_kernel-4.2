@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -3210,6 +3210,7 @@ static DEFINE_CLK_VOTER(dfab_sdc3_clk, &dfab_clk.c);
 static DEFINE_CLK_VOTER(dfab_sdc4_clk, &dfab_clk.c);
 static DEFINE_CLK_VOTER(dfab_sdc5_clk, &dfab_clk.c);
 static DEFINE_CLK_VOTER(dfab_scm_clk, &dfab_clk.c);
+static DEFINE_CLK_VOTER(dfab_qseecom_clk, &dfab_clk.c);
 
 static DEFINE_CLK_VOTER(ebi1_msmbus_clk, &ebi1_clk.c);
 static DEFINE_CLK_VOTER(ebi1_adm0_clk,   &ebi1_clk.c);
@@ -3740,6 +3741,8 @@ static struct clk_lookup msm_clocks_8x60[] = {
 	CLK_LOOKUP("core_clk",		amp_clk.c,		NULL),
 	CLK_LOOKUP("cam_clk",		cam_clk.c,		NULL),
 	CLK_LOOKUP("cam_clk",		cam_clk.c,		"1-001a"),
+	CLK_LOOKUP("cam_clk",		cam_clk.c,		"1-006c"),
+	CLK_LOOKUP("cam_clk",		cam_clk.c,		"1-0078"),
 	CLK_LOOKUP("csi_clk",		csi0_clk.c,		NULL),
 	CLK_LOOKUP("csi_clk",		csi0_clk.c,		"msm_csic.0"),
 #ifdef CONFIG_PANTECH_CAMERA_S5K6AAFX13
@@ -3751,10 +3754,12 @@ static struct clk_lookup msm_clocks_8x60[] = {
 	CLK_LOOKUP("csi_clk",		csi1_clk.c, "msm_camera_ov9726.0"),
 	CLK_LOOKUP("csi_clk",		csi1_clk.c, "msm_csic.1"),
 	CLK_LOOKUP("csi_src_clk",	csi_src_clk.c,		NULL),
-	CLK_LOOKUP("csi_src_clk",	csi_src_clk.c,		"msm_csic.0"),
-	CLK_LOOKUP("csi_src_clk",	csi_src_clk.c,		"msm_csic.1"),
 	CLK_LOOKUP("byte_clk",	dsi_byte_clk.c,		"mipi_dsi.1"),
 	CLK_LOOKUP("esc_clk",	dsi_esc_clk.c,		"mipi_dsi.1"),
+	CLK_LOOKUP("csi_src_clk",	csi_src_clk.c,		"msm_csic.0"),
+	CLK_LOOKUP("csi_src_clk",	csi_src_clk.c,		"msm_csic.1"),
+	CLK_LOOKUP("dsi_byte_div_clk",	dsi_byte_clk.c,		NULL),
+	CLK_LOOKUP("dsi_esc_clk",	dsi_esc_clk.c,		NULL),
 	CLK_LOOKUP("core_clk",		gfx2d0_clk.c,	"kgsl-2d0.0"),
 	CLK_LOOKUP("core_clk",		gfx2d0_clk.c,	"footswitch-8x60.0"),
 	CLK_LOOKUP("core_clk",		gfx2d1_clk.c,	"kgsl-2d1.1"),
@@ -3817,9 +3822,11 @@ static struct clk_lookup msm_clocks_8x60[] = {
 	CLK_LOOKUP("csi_pclk",		csi1_p_clk.c, "msm_camera_mt9d113.0"),
 #endif
 	CLK_LOOKUP("csi_pclk",		csi1_p_clk.c, "msm_camera_ov9726.0"),
-	CLK_LOOKUP("csi_pclk",		csi1_p_clk.c,		"msm_csic.1"),
 	CLK_LOOKUP("master_iface_clk",	dsi_m_p_clk.c,		"mipi_dsi.1"),
 	CLK_LOOKUP("slave_iface_clk",	dsi_s_p_clk.c,		"mipi_dsi.1"),
+	CLK_LOOKUP("csi_pclk",		csi1_p_clk.c,		"msm_csic.1"),
+	CLK_LOOKUP("dsi_m_pclk",	dsi_m_p_clk.c,		NULL),
+	CLK_LOOKUP("dsi_s_pclk",	dsi_s_p_clk.c,		NULL),
 	CLK_LOOKUP("iface_clk",		gfx2d0_p_clk.c,	"kgsl-2d0.0"),
 	CLK_LOOKUP("iface_clk",		gfx2d0_p_clk.c,	"footswitch-8x60.0"),
 	CLK_LOOKUP("iface_clk",		gfx2d1_p_clk.c,	"kgsl-2d1.1"),
@@ -3882,6 +3889,7 @@ static struct clk_lookup msm_clocks_8x60[] = {
 	CLK_LOOKUP("bus_clk",		dfab_sdc4_clk.c, "msm_sdcc.4"),
 	CLK_LOOKUP("bus_clk",		dfab_sdc5_clk.c, "msm_sdcc.5"),
 	CLK_LOOKUP("bus_clk",		dfab_scm_clk.c,	"scm"),
+	CLK_LOOKUP("bus_clk",		dfab_qseecom_clk.c,	"qseecom"),
 
 	CLK_LOOKUP("mem_clk",		ebi1_adm0_clk.c, "msm_dmov.0"),
 	CLK_LOOKUP("mem_clk",		ebi1_adm1_clk.c, "msm_dmov.1"),

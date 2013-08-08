@@ -10,6 +10,7 @@
  * published by the Free Software Foundation.
  *
  */
+ 
 #ifndef __LEDS_H_INCLUDED
 #define __LEDS_H_INCLUDED
 
@@ -59,3 +60,4 @@ ssize_t led_trigger_show(struct device *dev, struct device_attribute *attr,
 			char *buf);
 
 #endif	/* __LEDS_H_INCLUDED */
+

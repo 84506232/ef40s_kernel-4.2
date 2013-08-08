@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -35,10 +35,21 @@
 #include "mdp.h"
 #include "mdp4.h"
 
+struct mdp4_overlay_perf {
+	u32 mdp_clk_rate;
+	u32 use_ov0_blt;
+	u32 use_ov1_blt;
+	u32 mdp_bw;
+};
+
+extern struct mdp4_overlay_perf perf_current;
+
 u32 dsi_irq;
 u32 esc_byte_ratio;
 
+#ifndef CONFIG_FB_MSM_MIPI_DSI_SAMSUNG 
 static boolean tlmm_settings = FALSE;
+#endif
 
 static int mipi_dsi_probe(struct platform_device *pdev);
 static int mipi_dsi_remove(struct platform_device *pdev);
@@ -62,19 +73,6 @@ static struct platform_driver mipi_dsi_driver = {
 };
 
 struct device dsi_dev;
-
-#if defined(CONFIG_FB_MSM_MIPI_DSI_SONY)  
-static void mipi_lane_ctrl_ULPS(boolean on)
-{
-    if (on) {
-		MIPI_OUTP(MIPI_DSI_BASE + 0x00A8, 0x1f);
-	} else {
-		MIPI_OUTP(MIPI_DSI_BASE + 0x00A8, 0x1f00);
-		msleep(3);
-		MIPI_OUTP(MIPI_DSI_BASE + 0x00A8, 0x00);
-	}
-}
-#endif
 
 static int mipi_dsi_off(struct platform_device *pdev)
 {
@@ -119,13 +117,6 @@ static int mipi_dsi_off(struct platform_device *pdev)
 
 	ret = panel_next_off(pdev);
 
-#ifdef CONFIG_MSM_BUS_SCALING
-	mdp_bus_scale_update_request(0);
-#endif
-
-#if defined(CONFIG_FB_MSM_MIPI_DSI_SONY)  
-	mipi_lane_ctrl_ULPS(1);
-#endif
 
 	spin_lock_bh(&dsi_clk_lock);
 	mipi_dsi_clk_disable();
@@ -147,10 +138,11 @@ static int mipi_dsi_off(struct platform_device *pdev)
 	else
 		up(&mfd->dma->mutex);
 
+	pr_debug("%s-:\n", __func__);
+
 	return ret;
 }
 
-extern struct mdp4_overlay_perf perf_current;
 static int mipi_dsi_on(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -162,7 +154,9 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	struct mipi_panel_info *mipi;
 	u32 hbp, hfp, vbp, vfp, hspw, vspw, width, height;
 	u32 ystride, bpp, data;
+#ifdef F_SKYDISP_DSI_PADDING
 	u32 dummy_xres, dummy_yres;
+#endif
 	int target_type = 0;
 
 	pr_debug("%s+:\n", __func__);
@@ -184,6 +178,15 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	clk_rate = mfd->fbi->var.pixclock;
 	clk_rate = min(clk_rate, mfd->panel_info.clk_max);
 
+	mipi_dsi_phy_ctrl(1);
+
+	if (mdp_rev >= MDP_REV_42 && mipi_dsi_pdata)
+		target_type = mipi_dsi_pdata->target_type;
+
+	mipi_dsi_phy_init(0, &(mfd->panel_info), target_type);
+
+	mipi_dsi_clk_enable();
+
 	MIPI_OUTP(MIPI_DSI_BASE + 0x114, 1);
 	MIPI_OUTP(MIPI_DSI_BASE + 0x114, 0);
 
@@ -195,19 +198,6 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	vspw = var->vsync_len;
 	width = mfd->panel_info.xres;
 	height = mfd->panel_info.yres;
-
-#if defined(CONFIG_FB_MSM_MIPI_DSI_SONY)
-	mipi_lane_ctrl_ULPS(0);
-#endif
-
-	mipi_dsi_phy_ctrl(1);
-
-	if (mdp_rev == MDP_REV_42 && mipi_dsi_pdata)
-		target_type = mipi_dsi_pdata->target_type;
-
-	mipi_dsi_phy_init(0, &(mfd->panel_info), target_type);
-
-	mipi_dsi_clk_enable();
 
 	mipi  = &mfd->panel_info.mipi;
 	if (mfd->panel_info.type == MIPI_VIDEO_PANEL) {
@@ -286,6 +276,7 @@ static int mipi_dsi_on(struct platform_device *pdev)
 
 	mipi_dsi_op_mode_config(mipi->mode);
 
+#ifndef CONFIG_FB_MSM_MIPI_DSI_SAMSUNG
 	if (mfd->panel_info.type == MIPI_CMD_PANEL) {
 		if (pinfo->lcd.vsync_enable) {
 			if (pinfo->lcd.hw_vsync_mode && vsync_gpio >= 0) {
@@ -335,17 +326,15 @@ static int mipi_dsi_on(struct platform_device *pdev)
 		mipi_dsi_ahb_ctrl(0);
 		mipi_dsi_unprepare_clocks();
 	}
+#endif //CONFIG_FB_MSM_MIPI_DSI_SAMSUNG
 
-#ifdef CONFIG_MSM_BUS_SCALING
-	mdp_bus_scale_update_request(2);
-	perf_current.mdp_bw = OVERLAY_PERF_LEVEL4;
-	perf_current.mdp_clk_rate = 0;
-#endif
 
 	if (mdp_rev >= MDP_REV_41)
 		mutex_unlock(&mfd->dma->ov_mutex);
 	else
 		up(&mfd->dma->mutex);
+
+	pr_debug("%s-:\n", __func__);
 
 	return ret;
 }
@@ -404,7 +393,7 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 
 		disable_irq(dsi_irq);
 
-		if (mdp_rev == MDP_REV_42 && mipi_dsi_pdata &&
+		if (mdp_rev >= MDP_REV_42 && mipi_dsi_pdata &&
 			mipi_dsi_pdata->target_type == 1) {
 			/* Target type is 1 for device with (De)serializer
 			 * 0x4f00000 is the base for TV Encoder.
@@ -567,9 +556,10 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 
 	if (mfd->panel_info.type == MIPI_VIDEO_PANEL &&
 		!mfd->panel_info.clk_rate) {
+#ifdef F_SKYDISP_DSI_PADDING
 		h_period += mfd->panel_info.lcdc.xres_pad;
 		v_period += mfd->panel_info.lcdc.yres_pad;
-
+#endif
 		if (lanes > 0) {
 			mfd->panel_info.clk_rate =
 			((h_period * v_period * (mipi->frame_rate) * bpp * 8)
@@ -604,6 +594,26 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 		goto mipi_dsi_probe_err;
 
 	pdev_list[pdev_list_cnt++] = pdev;
+
+#if 1 // Debug Information
+	printk(KERN_ERR "mipi_dsi_probe: H.Period=%d, width=%d, BPorch=%d, xrex=%d,FPorch=%d\n",
+			h_period,
+			(mfd->panel_info.lcdc.h_pulse_width),
+			(mfd->panel_info.lcdc.h_back_porch),
+			(mfd->panel_info.xres),
+			(mfd->panel_info.lcdc.h_front_porch)	);
+	printk(KERN_ERR "mipi_dsi_probe: V.Period=%d, width=%d, BPorch=%d, xrex=%d,FPorch=%d\n",
+			v_period,
+			(mfd->panel_info.lcdc.v_pulse_width),
+			(mfd->panel_info.lcdc.v_back_porch),
+			(mfd->panel_info.yres),
+			(mfd->panel_info.lcdc.v_front_porch)	);
+	printk(KERN_ERR "mipi_dsi_probe: mipi->frame_rate = %d\n", mipi->frame_rate );	
+	printk(KERN_ERR "mipi_dsi_probe: Lanes = %d\n", lanes );	
+	printk(KERN_ERR "mipi_dsi_probe: pll_divider_config.clk_rate = %u\n", pll_divider_config.clk_rate );
+	printk(KERN_ERR "mipi_dsi_probe: dsi_pclk_rate = %u\n", dsi_pclk_rate );
+	printk(KERN_ERR "mipi_dsi_probe: mipi->dsi_pclk_rate = %u\n", mipi->dsi_pclk_rate );
+#endif 
 
 return 0;
 

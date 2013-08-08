@@ -35,11 +35,10 @@
 #include <linux/oom.h>
 #include <linux/sched.h>
 #include <linux/notifier.h>
-#include <linux/compaction.h>
 #include <linux/memory.h>
 #include <linux/memory_hotplug.h>
 
-static uint32_t lowmem_debug_level = 1;
+static uint32_t lowmem_debug_level = 2;
 static int lowmem_adj[6] = {
 	0,
 	1,
@@ -58,8 +57,6 @@ static int lowmem_minfree_size = 4;
 static unsigned int offlining;
 static struct task_struct *lowmem_deathpending;
 static unsigned long lowmem_deathpending_timeout;
-
-extern int compact_nodes(bool sync);
 
 #define lowmem_print(level, x...)			\
 	do {						\
@@ -162,8 +159,9 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		}
 	}
 	if (sc->nr_to_scan > 0)
-		lowmem_print(3, "lowmem_shrink %lu, %x, other_free %d other_file %d, min_adj %d\n",
-			     sc->nr_to_scan, sc->gfp_mask, other_free, other_file, min_adj);
+		lowmem_print(3, "lowmem_shrink %lu, %x, ofree %d %d, ma %d\n",
+			     sc->nr_to_scan, sc->gfp_mask, other_free, other_file,
+			     min_adj);
 	rem = global_page_state(NR_ACTIVE_ANON) +
 		global_page_state(NR_ACTIVE_FILE) +
 		global_page_state(NR_INACTIVE_ANON) +
@@ -207,6 +205,18 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		selected = p;
 		selected_tasksize = tasksize;
 		selected_oom_adj = oom_adj;
+		 //p10582 2012/05/23 : 1 sec time
+		if(lowmem_deathpending && selected != lowmem_deathpending)
+		{
+		   if(selected_oom_adj > 5){
+				force_sig(SIGKILL, selected);
+				lowmem_print(1, "time out send sigkill to %d (%s), adj %d, size %d ****\n",
+					 selected->pid, selected->comm,
+					 selected_oom_adj, selected_tasksize);
+				selected=NULL;
+				continue;
+		   }
+		}
 		lowmem_print(2, "select %d (%s), adj %d, size %d, to kill\n",
 			     p->pid, p->comm, oom_adj, tasksize);
 	}
@@ -215,15 +225,15 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 			     selected->pid, selected->comm,
 			     selected_oom_adj, selected_tasksize);
 		lowmem_deathpending = selected;
-		lowmem_deathpending_timeout = jiffies + HZ;
+		//p10582 2012/05/23 : 1 sec time
+		lowmem_deathpending_timeout = jiffies + (3*HZ/10);
+		//lowmem_deathpending_timeout = jiffies + HZ;		
 		force_sig(SIGKILL, selected);
 		rem -= selected_tasksize;
 	}
 	lowmem_print(4, "lowmem_shrink %lu, %x, return %d\n",
 		     sc->nr_to_scan, sc->gfp_mask, rem);
 	read_unlock(&tasklist_lock);
-    if (selected)
-        compact_nodes(false);
 	return rem;
 }
 

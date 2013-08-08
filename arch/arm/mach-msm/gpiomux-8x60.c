@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1922,7 +1922,7 @@ static struct msm_gpiomux_config msm8x60_charm_configs[] __initdata = {
 	/* MDM2AP_WAKEUP */
 	{
 #if defined(CONFIG_SKY_EF39S_BOARD) || defined(CONFIG_SKY_EF40S_BOARD) || defined(CONFIG_SKY_EF40K_BOARD) || defined(CONFIG_PANTECH_PRESTO_BOARD)
-		.gpio = 45,  //GCAN : TDMB ä»€è«œ ç…§é æ¾— åºšè–¦ é™æŒé¦¬æ‚Ÿ GBè¢´èµ° åˆŠå–° æ¡æ­³ è“„äºœ CONFIG_SKY_TDMB_SPI_QUP
+		.gpio = 45,  //GCAN : TDMB ½ºÄµ ¾ÈµÇ´Â ¹®Á¦ ¹ß»ıÇÏ¸ç GB¸ÓÁö ´©¶ô ºÎºĞ Ãß°¡ CONFIG_SKY_TDMB_SPI_QUP
 #else
 		.gpio = 40,
 #endif

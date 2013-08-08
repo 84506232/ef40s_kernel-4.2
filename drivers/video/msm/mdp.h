@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -43,7 +43,7 @@ extern ulong mdp4_display_intf;
 extern spinlock_t mdp_spin_lock;
 extern int mdp_rev;
 extern struct mdp_csc_cfg mdp_csc_convert[4];
-
+extern struct mdp_csc_cfg_data csc_cfg_matrix[];
 extern struct workqueue_struct *mdp_hist_wq;
 
 extern uint32 mdp_intr_mask;
@@ -92,10 +92,16 @@ extern unsigned char hdmi_prim_display;
 
 struct vsync {
 	ktime_t vsync_time;
+	struct completion vsync_comp;
 	struct device *dev;
 	struct work_struct vsync_work;
 	int vsync_irq_enabled;
+	int vsync_dma_enabled;
 	int disabled_clocks;
+	struct completion vsync_wait;
+	atomic_t suspend;
+	atomic_t vsync_resume;
+	int sysfs_created;
 };
 
 extern struct vsync vsync_cntrl;
@@ -254,6 +260,7 @@ struct mdp_hist_lut_info {
 struct mdp_hist_mgmt {
 	uint32_t block;
 	uint32_t irq_term;
+	uint32_t intr;
 	uint32_t base;
 	struct completion mdp_hist_comp;
 	struct mutex mdp_hist_mutex;
@@ -321,6 +328,14 @@ extern struct mdp_hist_mgmt *mdp_hist_mgmt_array[];
 #define TV_OUT_DMA3_START   BIT(13)
 #define MDP_HIST_DONE       BIT(20)
 
+/*MDP4 MDP histogram interrupts*/
+/*note: these are only applicable on MDP4+ targets*/
+#define INTR_VG1_HISTOGRAM		BIT(5)
+#define INTR_VG2_HISTOGRAM		BIT(6)
+#define INTR_DMA_P_HISTOGRAM		BIT(17)
+#define INTR_DMA_S_HISTOGRAM		BIT(26)
+/*end MDP4 MDP histogram interrupts*/
+
 /* histogram interrupts */
 #define INTR_HIST_DONE			BIT(1)
 #define INTR_HIST_RESET_SEQ_DONE	BIT(0)
@@ -335,7 +350,6 @@ extern struct mdp_hist_mgmt *mdp_hist_mgmt_array[];
 			MDP_DMA_S_DONE| \
 			MDP_DMA_E_DONE| \
 			LCDC_UNDERFLOW| \
-			MDP_HIST_DONE| \
 			TV_ENC_UNDERRUN)
 #endif
 
@@ -767,7 +781,7 @@ void mdp_lcdc_update(struct msm_fb_data_type *mfd);
 int mdp_dsi_video_on(struct platform_device *pdev);
 int mdp_dsi_video_off(struct platform_device *pdev);
 void mdp_dsi_video_update(struct msm_fb_data_type *mfd);
-void mdp3_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd)
+void mdp3_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd);
 static inline int mdp4_dsi_cmd_off(struct platform_device *pdev)
 {
 	return 0;
@@ -777,6 +791,10 @@ static inline int mdp4_dsi_video_off(struct platform_device *pdev)
 	return 0;
 }
 static inline int mdp4_lcdc_off(struct platform_device *pdev)
+{
+	return 0;
+}
+static inline int mdp4_mddi_off(struct platform_device *pdev)
 {
 	return 0;
 }
@@ -792,6 +810,19 @@ static inline int mdp4_lcdc_on(struct platform_device *pdev)
 {
 	return 0;
 }
+static inline int mdp4_mddi_on(struct platform_device *pdev)
+{
+	return 0;
+}
+#endif
+
+
+#ifndef CONFIG_FB_MSM_MDDI
+static inline void mdp4_mddi_rdptr_init(int cndx)
+{
+	/* empty */
+}
+
 #endif
 
 void set_cont_splashScreen_status(int);
@@ -816,12 +847,12 @@ int mdp_set_core_clk(u32 rate);
 int mdp_clk_round_rate(u32 rate);
 
 unsigned long mdp_get_core_clk(void);
-unsigned long mdp_perf_level2clk_rate(uint32 perf_level);
 
 #ifdef CONFIG_MSM_BUS_SCALING
-int mdp_bus_scale_update_request(uint32_t index);
+int mdp_bus_scale_update_request(u64 ab, u64 ib);
 #else
-static inline int mdp_bus_scale_update_request(uint32_t index)
+static inline int mdp_bus_scale_update_request(u64 ab,
+					       u64 ib)
 {
 	return 0;
 }
@@ -829,6 +860,12 @@ static inline int mdp_bus_scale_update_request(uint32_t index)
 void mdp_dma_vsync_ctrl(int enable);
 void mdp_dma_video_vsync_ctrl(int enable);
 void mdp_dma_lcdc_vsync_ctrl(int enable);
+ssize_t mdp_dma_show_event(struct device *dev,
+		struct device_attribute *attr, char *buf);
+ssize_t mdp_dma_video_show_event(struct device *dev,
+		struct device_attribute *attr, char *buf);
+ssize_t mdp_dma_lcdc_show_event(struct device *dev,
+		struct device_attribute *attr, char *buf);
 
 #ifdef MDP_HW_VSYNC
 void vsync_clk_prepare_enable(void);
@@ -873,14 +910,14 @@ static inline int mdp4_overlay_dsi_state_get(void)
 {
 	return 0;
 }
+static inline void mdp4_iommu_detach(void)
+{
+	/*empty */
+}
 #endif
 
 void mdp_vid_quant_set(void);
 #ifndef CONFIG_FB_MSM_MDP40
-static inline void mdp_dsi_cmd_overlay_suspend(struct msm_fb_data_type *mfd)
-{
-	/* empty */
-}
 static inline int msmfb_overlay_vsync_ctrl(struct fb_info *info,
 						void __user *argp)
 {

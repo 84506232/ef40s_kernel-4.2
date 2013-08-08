@@ -90,6 +90,7 @@ static int l2cap_answer_move_poll(struct sock *sk);
 static int l2cap_create_cfm(struct hci_chan *chan, u8 status);
 static int l2cap_deaggregate(struct hci_chan *chan, struct l2cap_pinfo *pi);
 static void l2cap_chan_ready(struct sock *sk);
+static void l2cap_conn_del(struct hci_conn *hcon, int err, u8 is_process);
 static u16 l2cap_get_smallest_flushto(struct l2cap_chan_list *l);
 static void l2cap_set_acl_flushto(struct hci_conn *hcon, u16 flush_to);
 static void l2cap_queue_acl_data(struct work_struct *worker);
@@ -814,8 +815,11 @@ void l2cap_send_disconn_req(struct l2cap_conn *conn, struct sock *sk, int err)
 {
 	struct l2cap_disconn_req req;
 
-	if (!conn)
+	//20121017 P12116_BT_SYSTEM stability issue QCT patch ++++
+	//if (!conn)
+	if (!conn || !conn->hcon) 
 		return;
+	//20121017 P12116_BT_SYSTEM stability issue QCT patch ++++
 
 	sk->sk_send_head = NULL;
 	skb_queue_purge(TX_QUEUE(sk));
@@ -1182,7 +1186,7 @@ static struct l2cap_conn *l2cap_conn_add(struct hci_conn *hcon, u8 status)
 	return conn;
 }
 
-void l2cap_conn_del(struct hci_conn *hcon, int err, u8 is_process)
+static void l2cap_conn_del(struct hci_conn *hcon, int err, u8 is_process)
 {
 	struct l2cap_conn *conn = hcon->l2cap_data;
 	struct sock *sk;
@@ -3319,7 +3323,10 @@ int l2cap_build_conf_req(struct sock *sk, void *data)
 	struct l2cap_conf_rfc rfc = { .mode = pi->mode };
 	void *ptr = req->data;
 
+//P11391 QCT_PATCH  l2cap MTU configuration
+	//BT_DBG("sk %p", sk);
 	BT_DBG("sk %p mode %d", sk, pi->mode);
+//P11391 QCT_PATCH  l2cap MTU configuration
 
 	if (pi->num_conf_req || pi->num_conf_rsp)
 		goto done;
@@ -3494,8 +3501,11 @@ static int l2cap_parse_conf_req(struct sock *sk, void *data)
 
 	BT_DBG("sk %p", sk);
 
-	if (pi->omtu > mtu)
+//P11391 QCT_PATCH  l2cap MTU configuration
+	if (pi->omtu > mtu) {
 		mtu = pi->omtu;
+	}
+//P11391 QCT_PATCH  l2cap MTU configuration
 
 	while (len >= L2CAP_CONF_OPT_SIZE) {
 		len -= l2cap_get_conf_opt(&req, &type, &olen, &val);
@@ -3598,8 +3608,12 @@ done:
 	if (pi->mode != rfc.mode) {
 		result = L2CAP_CONF_UNACCEPT;
 		rfc.mode = pi->mode;
-		if (mtu > L2CAP_DEFAULT_MTU)
+
+//P11391 QCT_PATCH  l2cap MTU configuration
+		if (mtu > L2CAP_DEFAULT_MTU) {
 			pi->omtu = mtu;
+		}
+//P11391 QCT_PATCH  l2cap MTU configuration
 
 		if (pi->num_conf_rsp == 1)
 			return -ECONNREFUSED;

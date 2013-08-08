@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -158,6 +158,8 @@ the appropriate macros. */
 #define MSG_SSID_21_LAST		10300
 #define MSG_SSID_22			10350
 #define MSG_SSID_22_LAST		10361
+#define MSG_SSID_23			0xC000
+#define MSG_SSID_23_LAST		0xC063
 
 struct diagpkt_delay_params {
 	void *rsp_ptr;
