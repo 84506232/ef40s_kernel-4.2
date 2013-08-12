@@ -4304,12 +4304,10 @@ static int configure_uart_gpios(int on)
 				return ret;
 		}
 	}
-	if (ret) {
-		uart_gpios_status = 0;
+	if (ret)
 		for (; i >= 0; i--)
 			msm_gpiomux_put(uart_gpios[i]);
 	return ret;
-	}
 }
 #ifdef CONFIG_PANTECH_BT
 static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
@@ -4969,6 +4967,7 @@ static struct platform_device *early_devices[] __initdata = {
 	&msm_device_dmov_adm1,
 };
 
+extern void bluesleep_setup_uart_port(struct platform_device *uart_dev);
 #ifdef CONFIG_PANTECH_BT //lsi@ps2.20110408 bluez by KSJ_device 2011_05_12
 static struct resource bluesleep_resources[] = {
 	{
@@ -8908,6 +8907,7 @@ static void __init msm8x60_init_buses(void)
 	msm_uart_dm1_pdata.wakeup_irq = gpio_to_irq(54); /* GSBI6(2) */
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
 #endif
+    bluesleep_setup_uart_port(&msm_device_uart_dm1);
 #ifdef CONFIG_MSM_GSBI9_UART
 	if (machine_is_msm8x60_fusion() || machine_is_msm8x60_fusn_ffa()
 #ifdef CONFIG_MACH_MSM8X60_EF39S
@@ -11760,12 +11760,17 @@ static unsigned bt_config_power_off[] = {
 	/*	GPIO_CFG(101, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),*/	/* BT_REG_ON */
 #endif
 };
+static int bt_status = 0;
 
 static int bluetooth_power(int on)
 {
 	int pin, rc;
 
 	printk(KERN_ERR "BT - %s: on(%d)\n",__func__, on);
+  if (on == bt_status)
+         return 0;
+
+
 #if 1
 	if (on)
 	{
@@ -11849,6 +11854,7 @@ static int bluetooth_power(int on)
 	}
 #endif
 	printk(KERN_ERR "BT - %s: on(%d) Done!! \n",__func__, on);
+    bt_status = on;
 	return 0;
 }
 
