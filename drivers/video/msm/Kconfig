@@ -706,10 +706,10 @@ config FB_MSM_HDMI_MSM_PANEL
 	depends on FB_MSM_MDP40
 	bool "MSM HDMI 1080p Panel"
 	select FB_MSM_DTV
-    select FB_MSM_EXT_INTERFACE_COMMON
+        select FB_MSM_EXT_INTERFACE_COMMON
 	select FB_MSM_HDMI_COMMON
 	select FB_MSM_HDMI_3D
-	default y
+	default n
 	---help---
 	  Support for 480p/720p/1080i/1080p output through MSM HDMI
 
@@ -719,14 +719,6 @@ config FB_MSM_HDMI_MSM_PANEL_DVI_SUPPORT
 	default n
 	---help---
 	  Support for DVI mode for MSM HDMI 1080p Panel
-
-config FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
-	depends on FB_MSM_HDMI_MSM_PANEL
-	bool "Use HDCP mode"
-	default y
-	---help---
-	  Support for HDCP mode for MSM HDMI 1080p Panel
-	  Choose to enable HDCP
 
 config FB_MSM_HDMI_MSM_PANEL_CEC_SUPPORT
 	depends on FB_MSM_HDMI_MSM_PANEL
@@ -805,6 +797,12 @@ config QUALCOMM_FIX_TMDS_OUT
 	default n
 	---help---
 	  Support for MHL_SII9244	  	  
+config QUALCOMM_FIX_TMDS_OUT
+	depends on QUALCOMM_FIX_TMDS_OUT
+	bool "QUALCOMM_FIX_TMDS_OUT"
+	default n
+	---help---
+	  Support for MHL_SII9244	  	  
 choice
 	depends on  (FB_MSM_MDP22 || FB_MSM_MDP31 || FB_MSM_MDP40)
 	prompt "TVOut Region"
@@ -879,7 +877,7 @@ endchoice
 
 choice
 	prompt "Default framebuffer color depth"
-	depends on FB_MSM_MDP40 || FB_MSM_MDP31
+	depends on FB_MSM_MDP40 || FB_MSM_MDP31 || FB_MSM_MDP303
 	default FB_MSM_DEFAULT_DEPTH_RGBA8888
 
 config FB_MSM_DEFAULT_DEPTH_RGB565

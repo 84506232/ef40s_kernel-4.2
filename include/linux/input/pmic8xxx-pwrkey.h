@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,7 +32,6 @@ struct pm8xxx_pwrkey_platform_data  {
 	 * closest level. Any value outside the valid range will be rejected.
 	 */
 	u32  kpd_trigger_delay_us;
-	u32 pwrkey_time_ms;
 	u32  wakeup;
 };
 

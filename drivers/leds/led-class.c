@@ -322,6 +322,7 @@ static int __init leds_init(void)
 	return 0;
 }
 
+
 static void __exit leds_exit(void)
 {
 	class_destroy(leds_class);
@@ -333,3 +334,4 @@ module_exit(leds_exit);
 MODULE_AUTHOR("John Lenz, Richard Purdie");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("LED Class Interface");
+

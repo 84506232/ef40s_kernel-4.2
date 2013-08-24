@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -122,6 +122,9 @@
 #include <linux/ion.h>
 #include <mach/ion.h>
 
+#ifdef CONFIG_MACH_MSM8X60_EF39S  // 20110429, FEATURE-WORK
+#define LCD_BL_I2C_CONTROL  // 20110405, kkcho, for EF39S Backlight-control
+#endif
 #if defined(CONFIG_PN544)
 #include <linux/pn544.h>
 #define NFC_I2C_SDA             72
@@ -141,13 +144,25 @@
 #include <linux/mfd/pm8xxx/misc.h>
 #endif /* CONFIG_SKY_GSBI12_UART_CONSOLE PZ2223 */
 
+//pz1946 20110907 interrupt pin change
+#if 0 //def CONFIG_SKY_SMB_CHARGER
+#define SC_STAT_IRQ_GPIO	63
+#endif
 #define MSM_SHARED_RAM_PHYS 0x40000000
 #define MDM2AP_SYNC 129
 
 #define GPIO_ETHERNET_RESET_N_DRAGON	30
+
+#ifdef CONFIG_MACH_MSM8X60_PRESTO  // kkcho_temp_presto  // p13777 kej 110623
+#define LCDC_SPI_GPIO_CLK				40//73
+#define LCDC_SPI_GPIO_CS				33//72
+#define LCDC_SPI_GPIO_MOSI				39//70
+#else
 #define LCDC_SPI_GPIO_CLK				73
 #define LCDC_SPI_GPIO_CS				72
 #define LCDC_SPI_GPIO_MOSI				70
+#endif
+
 #define LCDC_AUO_PANEL_NAME				"lcdc_auo_wvga"
 #define LCDC_SAMSUNG_OLED_PANEL_NAME	"lcdc_samsung_oled"
 #define LCDC_SAMSUNG_WSVGA_PANEL_NAME	"lcdc_samsung_wsvga"
@@ -288,6 +303,37 @@ enum {
 	GPIO_EPM_EXPANDER_IO14,
 	GPIO_EPM_EXPANDER_IO15,
 };
+
+#ifdef LCD_BL_I2C_CONTROL
+// 201110421, kkcho, BL-pin control
+#if defined(CONFIG_MACH_MSM8X60_EF39S) && (BOARD_REV == EV10)
+#define LCD_BL_SCL	73
+#define LCD_BL_SDA	72
+#else
+#define LCD_BL_SCL	21
+#define LCD_BL_SDA	22
+#endif
+//	.udelay = 2,	/* 250 KHz */
+static struct i2c_gpio_platform_data i2c_gpio_led_data = {
+	.scl_pin = LCD_BL_SCL,
+	.sda_pin = LCD_BL_SDA,
+	.udelay = 5,	/* 100 KHz */
+};
+
+struct platform_device msm_device_i2c_gpio_led = {
+	.name = "i2c-gpio",
+	.id = MSM_LED_I2C_BUS_ID,
+	.dev = {
+		.platform_data = &i2c_gpio_led_data,
+	}
+};
+
+static struct i2c_board_info i2c_led_devices[] __initdata = {
+	{
+		I2C_BOARD_INFO("MAX8831", 0x9A >> 1),  // 10011010
+	},
+};
+#endif /* LCD_BL_I2C_CONTROL */
 
 #ifdef MHL_I2C_CONTROL
 #define MHL_CSCL	27
@@ -511,8 +557,8 @@ static struct regulator_init_data saw_s0_init_data = {
 		.constraints = {
 			.name = "8901_s0",
 			.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE,
-			.min_uV = 700000,
-			.max_uV = 1350000,
+			.min_uV = 800000,
+			.max_uV = 1250000,
 		},
 		.consumer_supplies = vreg_consumers_8901_S0,
 		.num_consumer_supplies = ARRAY_SIZE(vreg_consumers_8901_S0),
@@ -522,8 +568,8 @@ static struct regulator_init_data saw_s1_init_data = {
 		.constraints = {
 			.name = "8901_s1",
 			.valid_ops_mask = REGULATOR_CHANGE_VOLTAGE,
-			.min_uV = 700000,
-			.max_uV = 1350000,
+			.min_uV = 800000,
+			.max_uV = 1250000,
 		},
 		.consumer_supplies = vreg_consumers_8901_S1,
 		.num_consumer_supplies = ARRAY_SIZE(vreg_consumers_8901_S1),
@@ -1860,6 +1906,8 @@ int msm_cam_gpio_tbl[] = {
 	47,/*CAMIF_I2C_DATA*/
 	48,/*CAMIF_I2C_CLK*/
 #ifndef CONFIG_PANTECH_CAMERA_HW
+	/* You have to configure common gpios here, and should configure other
+	 * gpios in sensor drivers. */
 	105,/*STANDBY*/
 #endif
 };
@@ -3162,7 +3210,7 @@ unsigned char hdmi_is_primary;
 #define MSM_PMEM_SMIPOOL_SIZE USER_SMI_SIZE
 
 #define MSM_ION_SF_SIZE		0x4000000 /* 64MB */
-#define MSM_ION_CAMERA_SIZE     0x4000000 //F_PANTECH_CAMERA  MSM_PMEM_ADSP_SIZE
+#define MSM_ION_CAMERA_SIZE     0x4000000
 #define MSM_ION_MM_FW_SIZE	0x200000 /* (2MB) */
 #define MSM_ION_MM_SIZE		0x3600000 /* (54MB) Must be a multiple of 64K */
 #define MSM_ION_MFC_SIZE	SZ_8K
@@ -3228,6 +3276,8 @@ static struct resource msm_fb_resources[] = {
 	}
 };
 
+static void set_mdp_clocks_for_wuxga(void);
+
 static int msm_fb_detect_panel(const char *name)
 {
 	if (machine_is_msm8x60_fluid()) {
@@ -3282,8 +3332,11 @@ static int msm_fb_detect_panel(const char *name)
 
 	if (!strncmp(name, HDMI_PANEL_NAME,
 			strnlen(HDMI_PANEL_NAME,
-				PANEL_NAME_MAX_LEN)))
+				PANEL_NAME_MAX_LEN))) {
+		if (hdmi_is_primary)
+			set_mdp_clocks_for_wuxga();
 		return 0;
+	}
 
 	if (!strncmp(name, TVOUT_PANEL_NAME,
 			strnlen(TVOUT_PANEL_NAME,
@@ -3458,12 +3511,74 @@ static uint32_t lcdc_spi_gpio_config_data[] = {
 			GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA),
 };
 
+
+#ifdef CONFIG_MACH_MSM8X60_PRESTO  // p13777 kej 110623
+static uint32_t lcdc_gpio_config_data[] = {
+	GPIO_CFG(0, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_pclk" },
+	GPIO_CFG(1, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_hsync" },
+	GPIO_CFG(2, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_vsync" },
+	GPIO_CFG(3, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_en" },
+
+	GPIO_CFG(4, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_red7" },
+	GPIO_CFG(5, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_red6" },
+	GPIO_CFG(6, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_red5" },
+	GPIO_CFG(7, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_red4" },
+	GPIO_CFG(8, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_red3" },
+	GPIO_CFG(9, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_red2" },
+	GPIO_CFG(10, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_red1" },
+	GPIO_CFG(11, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_red0" },
+
+	GPIO_CFG(12, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_grn7" },
+	GPIO_CFG(13, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_grn6" },
+	GPIO_CFG(14, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_grn5" },
+	GPIO_CFG(15, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_grn4" },
+	GPIO_CFG(16, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_grn3" },
+	GPIO_CFG(17, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_grn2" },
+	GPIO_CFG(18, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_grn1" },
+	GPIO_CFG(19, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_grn0" },
+
+	GPIO_CFG(20, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_blu7" },
+	GPIO_CFG(21, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_blu6" },
+	GPIO_CFG(22, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_blu5" },
+	GPIO_CFG(23, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_blu4" },
+	GPIO_CFG(24, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_blu3" },
+	GPIO_CFG(25, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_blu2" },
+	GPIO_CFG(26, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_blu1" },
+	GPIO_CFG(27, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA), //"lcdc_blu0" },
+};
+#endif
+
+
+#ifdef CONFIG_MACH_MSM8X60_PRESTO   // p13777 kej 110623
+static void lcdc_config_spi_gpios(int enable)
+{
+	int n;
+#ifdef CONFIG_MACH_MSM8X60_PRESTO
+	int m;
+#endif
+	//printk(KERN_ERR "+%s: kkcho for preston spi_init \n", __func__);
+	for (n = 0; n < ARRAY_SIZE(lcdc_spi_gpio_config_data); ++n)
+		gpio_tlmm_config(lcdc_spi_gpio_config_data[n], 0);
+	//printk(KERN_ERR "-%s: kkcho for preston spi_init \n", __func__);
+
+#ifdef CONFIG_MACH_MSM8X60_PRESTO  // kkcho_temp_presto
+	//printk(KERN_ERR "+%s: kkcho for preston LCDC_init \n", __func__);
+	for (m = 0; m < ARRAY_SIZE(lcdc_gpio_config_data); ++m)
+		gpio_tlmm_config(lcdc_gpio_config_data[m], 0);
+	//printk(KERN_ERR "-%s: kkcho for preston LCDC_init \n", __func__);
+#endif
+
+}
+
+#else
 static void lcdc_config_spi_gpios(int enable)
 {
 	int n;
 	for (n = 0; n < ARRAY_SIZE(lcdc_spi_gpio_config_data); ++n)
 		gpio_tlmm_config(lcdc_spi_gpio_config_data[n], 0);
 }
+
+#endif 
 #endif
 
 #ifdef CONFIG_FB_MSM_LCDC_SAMSUNG_OLED_PT
@@ -3610,13 +3725,17 @@ static struct resource hdmi_msm_resources[] = {
 
 static int hdmi_enable_5v(int on);
 static int hdmi_core_power(int on, int show);
+static int hdmi_gpio_config(int on);
 static int hdmi_cec_power(int on);
+static int hdmi_panel_power(int on);
 
 static struct msm_hdmi_platform_data hdmi_msm_data = {
 	.irq = HDMI_IRQ,
 	.enable_5v = hdmi_enable_5v,
 	.core_power = hdmi_core_power,
 	.cec_power = hdmi_cec_power,
+	.panel_power = hdmi_panel_power,
+	.gpio_config = hdmi_gpio_config,
 };
 
 static struct platform_device hdmi_msm_device = {
@@ -3698,6 +3817,7 @@ void __init msm8x60_set_display_params(char *prim_panel, char *ext_panel)
 			pr_debug("HDMI is the primary display by"
 				" boot parameter\n");
 			hdmi_is_primary = 1;
+			set_mdp_clocks_for_wuxga();
 		}
 	}
 	if (strnlen(ext_panel, PANEL_NAME_MAX_LEN)) {
@@ -4166,7 +4286,13 @@ static struct i2c_board_info cy8ctma340_dragon_board_info[] = {
 static int configure_uart_gpios(int on)
 {
 	int ret = 0, i;
-	int uart_gpios[] = {53, 54, 55, 56};
+	static int uart_gpios[] = { 53, 54, 55, 56 };
+	static int uart_gpios_status;
+
+	if (on == uart_gpios_status)
+		return 0;
+
+	uart_gpios_status = on;
 	for (i = 0; i < ARRAY_SIZE(uart_gpios); i++) {
 		if (on) {
 			ret = msm_gpiomux_get(uart_gpios[i]);
@@ -4178,10 +4304,12 @@ static int configure_uart_gpios(int on)
 				return ret;
 		}
 	}
-	if (ret)
+	if (ret) {
+		uart_gpios_status = 0;
 		for (; i >= 0; i--)
 			msm_gpiomux_put(uart_gpios[i]);
 	return ret;
+	}
 }
 #ifdef CONFIG_PANTECH_BT
 static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
@@ -4404,6 +4532,8 @@ static struct regulator_consumer_supply vreg_consumers_PM8058_L14[] = {
 static struct regulator_consumer_supply vreg_consumers_PM8058_L15[] = {
 	REGULATOR_SUPPLY("8058_l15",		NULL),
 	REGULATOR_SUPPLY("cam_vana",		"1-001a"),
+	REGULATOR_SUPPLY("cam_vana",		"1-006c"),
+	REGULATOR_SUPPLY("cam_vana",		"1-0078"),
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_L16[] = {
 	REGULATOR_SUPPLY("8058_l16",		NULL),
@@ -4435,6 +4565,8 @@ static struct regulator_consumer_supply vreg_consumers_PM8058_L24[] = {
 static struct regulator_consumer_supply vreg_consumers_PM8058_L25[] = {
 	REGULATOR_SUPPLY("8058_l25",		NULL),
 	REGULATOR_SUPPLY("cam_vdig",		"1-001a"),
+	REGULATOR_SUPPLY("cam_vdig",		"1-006c"),
+	REGULATOR_SUPPLY("cam_vdig",		"1-0078"),
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_S0[] = {
 	REGULATOR_SUPPLY("8058_s0",		NULL),
@@ -4454,6 +4586,8 @@ static struct regulator_consumer_supply vreg_consumers_PM8058_S4[] = {
 static struct regulator_consumer_supply vreg_consumers_PM8058_LVS0[] = {
 	REGULATOR_SUPPLY("8058_lvs0",		NULL),
 	REGULATOR_SUPPLY("cam_vio",			"1-001a"),
+	REGULATOR_SUPPLY("cam_vio",			"1-006c"),
+	REGULATOR_SUPPLY("cam_vio",			"1-0078"),
 };
 static struct regulator_consumer_supply vreg_consumers_PM8058_LVS1[] = {
 	REGULATOR_SUPPLY("8058_lvs1",		NULL),
@@ -4636,8 +4770,8 @@ static struct regulator_consumer_supply vreg_consumers_PM8901_S4_PC[] = {
 /* RPM early regulator constraints */
 static struct rpm_regulator_init_data rpm_regulator_early_init_data[] = {
 	/*	 ID       a_on pd ss min_uV   max_uV   init_ip    freq */
-	RPM_SMPS(PM8058_S0, 0, 1, 1,  500000, 1350000, SMPS_HMIN, 1p60),
-	RPM_SMPS(PM8058_S1, 0, 1, 1,  500000, 1350000, SMPS_HMIN, 1p60),
+	RPM_SMPS(PM8058_S0, 0, 1, 1,  500000, 1250000, SMPS_HMIN, 1p60),
+	RPM_SMPS(PM8058_S1, 0, 1, 1,  500000, 1250000, SMPS_HMIN, 1p60),
 };
 
 /* RPM regulator constraints */
@@ -6079,7 +6213,7 @@ static struct platform_device *surf_devices[] __initdata = {
 #ifdef CONFIG_SKY_TDMB_SPI_GPIO
 	&gpio_spi_tdmb_device,
 #endif
-#ifdef CONFIG_SERIAL_MSM_HS
+#if defined(CONFIG_SERIAL_MSM_HS) || defined(CONFIG_PANTECH_BT) //lsi@ps2.bluez
 	&msm_device_uart_dm1,
 #endif
 #ifdef CONFIG_MSM_SSBI
@@ -6239,6 +6373,10 @@ static struct platform_device *surf_devices[] __initdata = {
 #ifdef MHL_I2C_CONTROL
 	&msm_device_i2c_gpio_mhl,
 #endif
+
+#ifdef LCD_BL_I2C_CONTROL
+	&msm_device_i2c_gpio_led,
+#endif /*LCD_BL_I2C_CONTROL */
 
 	&msm_tsens_device,
 	&msm_rpm_device,
@@ -6624,7 +6762,14 @@ static int smb137b_detection_setup(void)
 
 static struct smb137b_platform_data smb137b_data __initdata = {
 	.chg_detection_config = smb137b_detection_setup,
+//pz1946 20110907 interrupt pin change
+#ifdef CONFIG_SKY_SMB_CHARGER
+	//.valid_n_gpio = PM8058_MPP_PM_TO_SYS(11),
 	.valid_n_gpio = PM8058_MPP_PM_TO_SYS(10),
+	//.valid_n_gpio = SC_STAT_IRQ_GPIO,
+#else
+	.valid_n_gpio = PM8058_MPP_PM_TO_SYS(10),
+#endif
 	.batt_mah_rating = 950,
 };
 
@@ -6635,7 +6780,13 @@ static struct i2c_board_info smb137b_charger_i2c_info[] __initdata = {
 #else
 		I2C_BOARD_INFO("smb137b", 0x08),
 #endif
+//pz1946 20110907 interrupt pin change
+#ifdef CONFIG_SKY_SMB_CHARGER
+		//.irq = MSM_GPIO_TO_INT(SC_STAT_IRQ_GPIO),
 		.irq = PM8058_IRQ_BASE + PM8058_CBLPWR_IRQ,
+#else
+		.irq = PM8058_IRQ_BASE + PM8058_CBLPWR_IRQ,
+#endif
 		.platform_data = &smb137b_data,
 	},
 };
@@ -7158,7 +7309,7 @@ static struct pm8xxx_vibrator_platform_data pm8058_vib_pdata = {
 
 static struct pm8xxx_rtc_platform_data pm8058_rtc_pdata = {
 	.rtc_write_enable       = true,
-	.rtc_alarm_powerup	= true,
+	.rtc_alarm_powerup	= false,
 };
 
 static struct pm8xxx_pwrkey_platform_data pm8058_pwrkey_pdata = {
@@ -8473,7 +8624,7 @@ static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 		max17040_i2c_boardinfo,
 		ARRAY_SIZE(max17040_i2c_boardinfo),
 	},
-#endif
+#endif //CONFIG_SKY_BATTERY_MAX17040
 #if defined(CONFIG_BATTERY_BQ27520) || \
 		defined(CONFIG_BATTERY_BQ27520_MODULE)
 	{
@@ -8706,6 +8857,9 @@ static void __init msm8x60_init_buses(void)
 #if defined(CONFIG_SKY_TDMB_SPI_QUP)
 	msm_gsbi2_qup_spi_device.dev.platform_data = &msm_gsbi2_qup_spi_pdata;
 #endif
+//#ifdef CONFIG_SKY_TDMB_SPI_GPIO
+//	gpio_spi_tdmb_device.dev.platform_data = &gpio_spi_tdmb_data;
+//#endif
 #ifdef CONFIG_I2C_SSBI
 	msm_device_ssbi3.dev.platform_data = &msm_ssbi3_pdata;
 #endif
@@ -10591,8 +10745,9 @@ static int hdmi_core_power(int on, int show)
 	static struct regulator *reg_8058_l16;		/* VDD_HDMI */
 #endif
 	static int prev_on;
+#ifndef PANTECH_MHL_SII9244_POWER_CTRL  // 20110516, kkcho, remove for MHL Device.
 	int rc;
-
+#endif
 	if (on == prev_on)
 		return 0;
 
@@ -10612,6 +10767,31 @@ static int hdmi_core_power(int on, int show)
 			return rc;
 		}
 #endif
+		pr_debug("%s(on): success\n", __func__);
+	} else {
+#ifndef PANTECH_MHL_SII9244_POWER_CTRL // 20110516, kkcho, remove for MHL Device.
+		rc = regulator_disable(reg_8058_l16);
+		if (rc)
+			pr_warning("'%s' regulator disable failed, rc=%d\n",
+				"8058_l16", rc);
+		pr_debug("%s(off): success\n", __func__);
+#endif
+	}
+
+	prev_on = on;
+
+	return 0;
+}
+
+static int hdmi_gpio_config(int on)
+{
+	int rc = 0;
+	static int prev_on;
+
+	if (on == prev_on)
+		return 0;
+
+	if (on) {
 		rc = gpio_request(170, "HDMI_DDC_CLK");
 		if (rc) {
 			pr_err("'%s'(%d) gpio_request failed, rc=%d\n",
@@ -10624,36 +10804,21 @@ static int hdmi_core_power(int on, int show)
 				"HDMI_DDC_DATA", 171, rc);
 			goto error2;
 		}
-#if (defined(CONFIG_MACH_MSM8X60_EF39S) && (BOARD_REV >= TP20)) || \
-	(defined(CONFIG_MACH_MSM8X60_EF40K) && (BOARD_REV >= TP10)) || \
-	(defined(CONFIG_MACH_MSM8X60_EF40S) && (BOARD_REV >= TP10))	 
 		rc = gpio_request(172, "HDMI_HPD");
 		if (rc) {
 			pr_err("'%s'(%d) gpio_request failed, rc=%d\n",
 				"HDMI_HPD", 172, rc);
 			goto error3;
 		}
-#endif
-		pr_info("%s(on): success\n", __func__);
+		pr_debug("%s(on): success\n", __func__);
 	} else {
 		gpio_free(170);
 		gpio_free(171);
-#if (defined(CONFIG_MACH_MSM8X60_EF39S) && (BOARD_REV >= TP20)) || \
-	(defined(CONFIG_MACH_MSM8X60_EF40K) && (BOARD_REV >= TP10)) || \
-	(defined(CONFIG_MACH_MSM8X60_EF40S) && (BOARD_REV >= TP10))	 
 		gpio_free(172);
-#endif
-#ifndef PANTECH_MHL_SII9244_POWER_CTRL  // 20110516, kkcho, remove for MHL Device.
-		rc = regulator_disable(reg_8058_l16);
-		if (rc)
-			pr_warning("'%s' regulator disable failed, rc=%d\n",
-				"8058_l16", rc);
-#endif
-		pr_info("%s(off): success\n", __func__);
+		pr_debug("%s(off): success\n", __func__);
 	}
 
 	prev_on = on;
-
 	return 0;
 
 #if (defined(CONFIG_MACH_MSM8X60_EF39S) && (BOARD_REV >= TP20)) || \
@@ -10661,13 +10826,16 @@ static int hdmi_core_power(int on, int show)
 	(defined(CONFIG_MACH_MSM8X60_EF40S) && (BOARD_REV >= TP10))
 error3:	
 	gpio_free(172);
-#endif	
 error2:
 	gpio_free(171);
 error1:
 	gpio_free(170);
-#ifndef PANTECH_MHL_SII9244_POWER_CTRL  // 20110516, kkcho, remove for MHL Device.
-	regulator_disable(reg_8058_l16);
+#else
+error3:
+	gpio_free(171);
+error2:
+	gpio_free(170);
+error1:
 #endif
 	return rc;
 }
@@ -10724,7 +10892,18 @@ error:
 	return rc;
 }
 #endif
+static int hdmi_panel_power(int on)
+{
+	int rc;
 
+	pr_debug("%s: HDMI Core: %s\n", __func__, (on ? "ON" : "OFF"));
+	rc = hdmi_core_power(on, 1);
+	if (rc)
+		rc = hdmi_cec_power(on);
+
+	pr_debug("%s: HDMI Core: %s Success\n", __func__, (on ? "ON" : "OFF"));
+	return rc;
+}
 #undef _GET_REGULATOR
 
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
@@ -10870,51 +11049,6 @@ static struct msm_bus_vectors mdp_init_vectors[] = {
 	},
 };
 
-#ifdef CONFIG_FB_MSM_HDMI_AS_PRIMARY
-static struct msm_bus_vectors hdmi_as_primary_vectors[] = {
-	/* If HDMI is used as primary */
-	 {
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 2000000000,
-		.ib = 2000000000,
-	 },
-	 /* Master and slaves can be from different fabrics */
-	 {
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 2000000000,
-		.ib = 2000000000,
-	 },
-};
-
-static struct msm_bus_paths mdp_bus_scale_usecases[] = {
-	{
-		ARRAY_SIZE(mdp_init_vectors),
-		mdp_init_vectors,
-	},
-	{
-		ARRAY_SIZE(hdmi_as_primary_vectors),
-		hdmi_as_primary_vectors,
-	},
-	{
-		ARRAY_SIZE(hdmi_as_primary_vectors),
-		hdmi_as_primary_vectors,
-	},
-	{
-		ARRAY_SIZE(hdmi_as_primary_vectors),
-		hdmi_as_primary_vectors,
-	},
-	{
-		ARRAY_SIZE(hdmi_as_primary_vectors),
-		hdmi_as_primary_vectors,
-	},
-	{
-		ARRAY_SIZE(hdmi_as_primary_vectors),
-		hdmi_as_primary_vectors,
-	},
-};
-#else
 #ifdef CONFIG_FB_MSM_LCDC_DSUB
 static struct msm_bus_vectors mdp_sd_smi_vectors[] = {
 	/* Default case static display/UI/2d/3d if FB SMI */
@@ -11134,7 +11268,7 @@ static struct msm_bus_scale_pdata mdp_bus_scale_pdata = {
 	ARRAY_SIZE(mdp_bus_scale_usecases),
 	.name = "mdp",
 };
-#endif
+
 #endif
 #ifdef CONFIG_MSM_BUS_SCALING
 static struct msm_bus_vectors dtv_bus_init_vectors[] = {
@@ -11213,6 +11347,7 @@ static struct msm_bus_scale_pdata dtv_bus_scale_pdata = {
 
 static struct lcdc_platform_data dtv_pdata = {
 	.bus_scale_table = &dtv_bus_scale_pdata,
+	.lcdc_power_save = hdmi_panel_power,
 };
 
 static struct msm_bus_paths dtv_hdmi_prim_bus_scale_usecases[] = {
@@ -12517,6 +12652,10 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 	if (machine_is_msm8x60_fluid())
 		platform_device_register(&msm_gsbi2_qup_spi_device);
 #endif
+
+//#ifdef CONFIG_SKY_TDMB_SPI_GPIO
+//	platform_device_register(&gpio_spi_tdmb_device);
+//#endif
 
 #if defined(CONFIG_TOUCHSCREEN_CYTTSP_I2C) || \
 		defined(CONFIG_TOUCHSCREEN_CYTTSP_I2C_MODULE)

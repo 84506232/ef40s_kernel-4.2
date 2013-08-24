@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,6 +25,12 @@
 #include <linux/io.h>
 #include <mach/msm_iomap.h>
 #include <linux/pm.h>
+
+// p15060, MDM boot up fail fix
+// p15060, remove reset code(unnecessary)
+#if (0)
+#include <linux/gpio.h>
+#endif
 
 /* Trips: from very hot to very cold */
 enum tsens_trip_type {
@@ -93,6 +99,12 @@ struct tsens_tm_device {
 };
 
 struct tsens_tm_device *tmdev;
+
+// p15060, MDM boot up fail fix
+// p15060, remove reset code(unnecessary)
+#if (0)
+bool mdm_reset = false;
+#endif
 
 /* Temperature on y axis and ADC-code on x-axis */
 static int tsens_tz_code_to_degC(int adc_code)
@@ -183,6 +195,27 @@ static int tsens_tz_set_mode(struct thermal_zone_device *thermal,
 		writel(reg, TSENS_CNTL_ADDR);
 	}
 	tm_sensor->mode = mode;
+
+// p15060, MDM boot up fail fix
+// p15060, remove reset code(unnecessary)
+// MDM2AP_STATUS       -> 134
+// AP2MDM_PMIC_RESET_N -> 131
+#if (0)
+
+	if( !mdm_reset )
+	{
+		if (gpio_get_value(134) == 0)
+		{
+			pr_info("MDM Status PIN is 0 , MDM reset now\n");
+			gpio_direction_output(131, 1);
+			msleep(4000);
+			gpio_direction_output(131, 0);
+		}
+
+		mdm_reset = true;
+	}
+
+#endif
 
 	return 0;
 }

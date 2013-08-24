@@ -1780,6 +1780,7 @@ static int msm_rotator_start(unsigned long arg,
 	unsigned int is_planar420 = 0;
 	int fast_yuv_en = 0;
 	struct rot_sync_info *sync_info;
+
 	if (copy_from_user(&info, (void __user *)arg, sizeof(info)))
 		return -EFAULT;
 

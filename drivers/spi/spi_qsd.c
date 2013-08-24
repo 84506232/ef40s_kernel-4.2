@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1252,6 +1252,20 @@ static irqreturn_t msm_spi_error_irq(int irq, void *dev_id)
 		dev_warn(master->dev.parent, "SPI input underrun error\n");
 	if (spi_err & SPI_ERR_OUTPUT_UNDER_RUN_ERR)
 		dev_warn(master->dev.parent, "SPI output underrun error\n");
+#if 0 //EF39S GB  CONFIG_SKY_TDMB_SPI_QUP is y
+	if (spi_err & SPI_ERR_INPUT_OVER_RUN_ERR) {
+		/*
+		 * When switching from Run to Reset state, the core generates
+		 * a bogus input overrun error on 8660. We ignore such errors
+		 * when the transfer has completed successfully.
+		 */
+#ifndef CONFIG_SKY_TDMB_SPI_QUP // 20110811 cys for TDMB SPI_QUP
+		if (dd->mode != SPI_MODE_NONE)
+			dev_warn(master->dev.parent,
+				 "SPI input overrun error\n");
+#endif
+	}
+#endif
 	msm_spi_get_clk_err(dd, &spi_err);
 	if (spi_err & SPI_ERR_CLK_OVER_RUN_ERR)
 		dev_warn(master->dev.parent, "SPI clock overrun error\n");

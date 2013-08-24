@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2011, The Linux Foundation. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -125,6 +125,13 @@ static int audlpa_pause(struct audio *audio);
 static long pcm_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 static int audlpa_set_pcm_params(void *data);
 
+/* Use msm_set_volume() for stream mute control */
+#define LPA_MUTE_CTRL
+
+#ifdef LPA_MUTE_CTRL
+static int audlpa_mute;
+#endif
+
 struct audlpa_dec audlpa_decs[] = {
 	{"msm_pcm_lp_dec", AUDDEC_DEC_PCM, &pcm_ioctl,
 		&audlpa_set_pcm_params},
@@ -138,13 +145,34 @@ static void lpa_listner(u32 evt_id, union auddev_evt_data *evt_payload,
 
 	switch (evt_id) {
 	case AUDDEV_EVT_STREAM_VOL_CHG:
+#ifdef LPA_MUTE_CTRL
+		if (evt_payload->session_vol == 0) {
+			audlpa_mute = 1;
+		} else {
+			audlpa_mute = 0;
+		}
+#else
 		audio->volume = evt_payload->session_vol;
+#endif
+
+#ifdef LPA_MUTE_CTRL
+		pr_info("AUDDEV_EVT_STREAM_VOL_CHG, mute=%d\n", audlpa_mute);
+#else
 		pr_debug("%s: AUDDEV_EVT_STREAM_VOL_CHG, stream vol %d, "
 				 "enabled = %d\n", __func__, audio->volume,
 				 audio->out_enabled);
+#endif
 		if (audio->out_enabled == 1) {
 			if (audio->ac) {
+#ifdef LPA_MUTE_CTRL
+				if (audlpa_mute == 1) {
+					rc = q6asm_set_volume(audio->ac, 0);
+				} else {
+					rc = q6asm_set_volume(audio->ac, audio->volume);
+				}
+#else
 				rc = q6asm_set_volume(audio->ac, audio->volume);
+#endif
 				if (rc < 0) {
 					pr_err("%s: Send Volume command failed"
 						" rc=%d\n", __func__, rc);
@@ -167,7 +195,8 @@ static void audlpa_prevent_sleep(struct audio *audio)
 static void audlpa_allow_sleep(struct audio *audio)
 {
 	pr_debug("%s:\n", __func__);
-	wake_unlock(&audio->wakelock);
+	wake_lock_timeout(&audio->wakelock, 5 * HZ);
+	/* wake_unlock(&audio->wakelock); */
 }
 
 /* must be called with audio->lock held */
@@ -342,10 +371,11 @@ static void audlpa_async_send_data(struct audio *audio, unsigned needed,
 static int audlpa_events_pending(struct audio *audio)
 {
 	int empty;
+	unsigned long flags;
 
-	spin_lock(&audio->event_queue_lock);
+	spin_lock_irqsave(&audio->event_queue_lock,flags);
 	empty = !list_empty(&audio->event_queue);
-	spin_unlock(&audio->event_queue_lock);
+	spin_unlock_irqrestore(&audio->event_queue_lock,flags);
 	return empty || audio->event_abort;
 }
 
@@ -353,8 +383,9 @@ static void audlpa_reset_event_queue(struct audio *audio)
 {
 	struct audlpa_event *drv_evt;
 	struct list_head *ptr, *next;
+	unsigned long flags;
 
-	spin_lock(&audio->event_queue_lock);
+	spin_lock_irqsave(&audio->event_queue_lock,flags);
 	list_for_each_safe(ptr, next, &audio->event_queue) {
 		drv_evt = list_first_entry(&audio->event_queue,
 			struct audlpa_event, list);
@@ -367,7 +398,7 @@ static void audlpa_reset_event_queue(struct audio *audio)
 		list_del(&drv_evt->list);
 		kfree(drv_evt);
 	}
-	spin_unlock(&audio->event_queue_lock);
+	spin_unlock_irqrestore(&audio->event_queue_lock,flags);
 
 	return;
 }
@@ -378,6 +409,7 @@ static long audlpa_process_event_req(struct audio *audio, void __user *arg)
 	struct msm_audio_event usr_evt;
 	struct audlpa_event *drv_evt = NULL;
 	int timeout;
+	unsigned long flags;
 
 	if (copy_from_user(&usr_evt, arg, sizeof(struct msm_audio_event)))
 		return -EFAULT;
@@ -405,7 +437,7 @@ static long audlpa_process_event_req(struct audio *audio, void __user *arg)
 
 	rc = 0;
 
-	spin_lock(&audio->event_queue_lock);
+	spin_lock_irqsave(&audio->event_queue_lock,flags);
 	if (!list_empty(&audio->event_queue)) {
 		drv_evt = list_first_entry(&audio->event_queue,
 			struct audlpa_event, list);
@@ -417,7 +449,7 @@ static long audlpa_process_event_req(struct audio *audio, void __user *arg)
 		list_add_tail(&drv_evt->list, &audio->free_event_queue);
 	} else
 		rc = -1;
-	spin_unlock(&audio->event_queue_lock);
+	spin_unlock_irqrestore(&audio->event_queue_lock,flags);
 
 	if (drv_evt && (drv_evt->event_type == AUDIO_EVENT_WRITE_DONE ||
 	    drv_evt->event_type == AUDIO_EVENT_READ_DONE)) {
@@ -454,6 +486,7 @@ static int audlpa_ion_check(struct audio *audio,
 
 	return 0;
 }
+
 static int audlpa_ion_add(struct audio *audio,
 			struct msm_audio_ion_info *info)
 {
@@ -780,6 +813,26 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 
 	case AUDIO_SET_VOLUME:
+		/* pr_debug("AUDIO_SET_VOLUME %d, audio->volume=%d", arg, audio->volume); */
+		pr_info("AUDIO_SET_VOLUME %d, audio->volume=%d, mute=%d", (int)arg, audio->volume, audlpa_mute);
+#ifdef LPA_MUTE_CTRL
+		audio->volume = arg;
+#endif
+		if (audio->out_enabled) {
+#ifdef LPA_MUTE_CTRL
+			if (!audlpa_mute) {
+				rc = q6asm_set_volume(audio->ac, arg);
+			} else {
+				rc = 0;
+			}
+#else
+			rc = q6asm_set_volume(audio->ac, arg);
+#endif
+			if (rc < 0) {
+				pr_err("%s: Send Volume command failed"
+					" rc=%d\n", __func__, rc);
+			}
+		}
 		break;
 
 	case AUDIO_SET_PAN:
@@ -840,10 +893,6 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				.step = SOFT_VOLUME_STEP,
 				.rampingcurve = SOFT_VOLUME_CURVE_LINEAR,
 			};
-			if (softpause.rampingcurve == SOFT_PAUSE_CURVE_LINEAR)
-				softpause.step = SOFT_PAUSE_STEP_LINEAR;
-			if (softvol.rampingcurve == SOFT_VOLUME_CURVE_LINEAR)
-				softvol.step = SOFT_VOLUME_STEP_LINEAR;
 			audio->out_enabled = 1;
 			audio->out_needed = 1;
 			rc = q6asm_set_volume(audio->ac, audio->volume);
@@ -873,6 +922,10 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			if (audio->stopped == 1)
 				audio->stopped = 0;
 			audlpa_prevent_sleep(audio);
+
+#ifdef LPA_MUTE_CTRL
+			audlpa_mute = 0;
+#endif
 		}
 		break;
 
@@ -1170,8 +1223,9 @@ static void audlpa_post_event(struct audio *audio, int type,
 	union msm_audio_event_payload payload)
 {
 	struct audlpa_event *e_node = NULL;
+	unsigned long flags;
 
-	spin_lock(&audio->event_queue_lock);
+	spin_lock_irqsave(&audio->event_queue_lock,flags);
 
 	pr_debug("%s:\n", __func__);
 	if (!list_empty(&audio->free_event_queue)) {
@@ -1182,6 +1236,7 @@ static void audlpa_post_event(struct audio *audio, int type,
 		e_node = kmalloc(sizeof(struct audlpa_event), GFP_ATOMIC);
 		if (!e_node) {
 			pr_err("%s: No mem to post event %d\n", __func__, type);
+			spin_unlock_irqrestore(&audio->event_queue_lock,flags);
 			return;
 		}
 	}
@@ -1190,7 +1245,7 @@ static void audlpa_post_event(struct audio *audio, int type,
 	e_node->payload = payload;
 
 	list_add_tail(&e_node->list, &audio->event_queue);
-	spin_unlock(&audio->event_queue_lock);
+	spin_unlock_irqrestore(&audio->event_queue_lock,flags);
 	wake_up(&audio->event_wait);
 }
 

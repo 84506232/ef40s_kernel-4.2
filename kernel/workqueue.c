@@ -1937,6 +1937,11 @@ static int worker_thread(void *__worker)
 
 	/* tell the scheduler that this is a workqueue worker */
 	worker->task->flags |= PF_WQ_WORKER;
+
+#if 0//def CONFIG_SKY_TDMB_SPI_IF
+	if((strcmp(worker->current_cwq->wq->name, "spi_qsd.5")==0) || (strcmp(worker->current_cwq->wq->name, "spi_gpio.5")==0))
+		set_user_nice(current, RESCUER_NICE_LEVEL);
+#endif
 woke_up:
 	spin_lock_irq(&gcwq->lock);
 
